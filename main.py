@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Tuple
 from urllib import parse, error, request
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(name)s:%(funcName)s >> %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s:%(funcName)s >> %(message)s')
 logger = logging.getLogger(__name__)
 EXCHANGES_ADDRESS = "https://www.cbr-xml-daily.ru/daily_json.js"
 
