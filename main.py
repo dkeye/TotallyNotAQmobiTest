@@ -104,7 +104,7 @@ class Handlers(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed_url = parse.urlsplit(self.path)
-        logger.debug("url %s", parsed_url)
+        logger.info("url %s", parsed_url)
         if not (handler := self.get_handlers.get(parsed_url.path)):
             self.reply(404)
             return
