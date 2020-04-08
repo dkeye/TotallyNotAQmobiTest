@@ -15,23 +15,28 @@ Params = Tuple[str, float]
 Response = Tuple[int, str]
 
 
-def validate_and_parse(query: str) -> Params:
-    assert query, "params not specified"
-    args = parse.parse_qs(query)
-    # parse_qs return dict with lists in values like {key: ['value']}
-    # here we do
-    # if 'currency' in args and args['currency] not is None:
-    #     currency = args['currency']"
-    # else:
-    #     raise AssertionError('reason')
-    logger.debug("args %s", args)
-    assert (currency := args.get('currency')) and (currency := currency[0]), "currency not specified"
-    assert (value := args.get('value')) and (value := value[0]), "value not specified"
+def validate_and_parse(query: str) -> (Params, str):
+    result, reason = (), ""
     try:
+        assert query, "params not specified"
+        args = parse.parse_qs(query)
+        # parse_qs return dict with lists in values like {key: ['value']}
+        # here we do
+        # if 'currency' in args and args['currency] not is None:
+        #     currency = args['currency']"
+        # else:
+        #     raise AssertionError('reason')
+        logger.debug("args %s", args)
+        assert (currency := args.get('currency')) and (currency := currency[0]), "currency not specified"
+        assert (value := args.get('value')) and (value := value[0]), "value not specified"
         value = float(value)
+    except AssertionError as e:
+        reason = str(e)
     except ValueError:
-        raise AssertionError(f"value is not a number, value is '{value}'")
-    return currency, value
+        reason = f"value is not a number, value is '{value}'"
+    else:
+        result = currency, value
+    return result, reason
 
 
 def get_exchanges_rates(currency: str, trying: int = 3) -> float:
@@ -59,14 +64,15 @@ def get_exchanges_rates(currency: str, trying: int = 3) -> float:
 
 
 def convert_handler(query: str) -> Response:
-    try:
-        logger.debug("query %s", query)
-        currency, value = validate_and_parse(query)
-    except AssertionError as e:
-        logger.warning("validate params error: %s", str(e))
-        reason = json.dumps({'reason': str(e)})
+    logger.debug("query %s", query)
+    params, reason = validate_and_parse(query)
+
+    if not params:
+        logger.warning("validate params error: %s", reason)
+        reason = json.dumps({'reason': reason})
         return 400, reason
 
+    currency, value = params
     try:
         rate = get_exchanges_rates(currency)
     except AssertionError as e:
