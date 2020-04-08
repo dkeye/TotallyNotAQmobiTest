@@ -85,13 +85,13 @@ def convert_handler(query: str) -> Response:
     exchanges_response, reason = get_exchanges_rates(3)
     if not exchanges_response:
         logger.warning(reason)
-        reason = json.dumps({'reason': reason})
+        reason = json.dumps({'reason': "exchanges server is not available"})
         return 500, reason
 
     rate, reason = get_currency_rate(currency, exchanges_response)
     if not rate:
         logger.warning(reason)
-        reason = json.dumps({'reason': reason})
+        reason = json.dumps({'reason': "exchanges server error"})
         return 500, reason
 
     result_value = json.dumps({"value": value * rate})
