@@ -29,6 +29,7 @@ def validate_and_parse(query: str) -> (Params, str):
         #     raise AssertionError('reason')
         logger.debug("args %s", args)
         assert (currency := args.get('currency')) and (currency := currency[0]), "currency not specified"
+        assert currency.isalpha(), 'wrong currency'
         assert (value := args.get('value')) and (value := value[0]), "value not specified"
         value = float(value)
     except AssertionError as e:
@@ -102,18 +103,16 @@ class Handlers(BaseHTTPRequestHandler):
         "/convert": convert_handler,
     }
 
-    def do_GET(self) -> None:
+    def do_GET(self) -> Response:
         parsed_url = parse.urlsplit(self.path)
         logger.info("url %s", parsed_url)
         if not (handler := self.get_handlers.get(parsed_url.path)):
-            self.reply(404)
-            return
+            return self.reply(404)
 
         response = handler(parsed_url.query)
-        self.reply(*response)
-        return
+        return self.reply(*response)
 
-    def reply(self, status_code: int, message="") -> None:
+    def reply(self, status_code: int, message="") -> Response:
         self.send_response(status_code)
         if message:
             self.send_header('Content-Type', 'application/json')
@@ -121,6 +120,7 @@ class Handlers(BaseHTTPRequestHandler):
             self.wfile.write(message.encode())
         else:
             self.end_headers()
+        return status_code, message
 
 
 def run(handler: BaseHTTPRequestHandler = Handlers, PORT: int = None) -> None:
