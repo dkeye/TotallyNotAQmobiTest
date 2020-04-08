@@ -3,7 +3,7 @@ import json
 import logging
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Tuple
+from typing import Tuple, NewType
 from urllib import parse, error, request
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s:%(funcName)s >> %(message)s')
@@ -13,6 +13,7 @@ EXCHANGES_ADDRESS = "https://www.cbr-xml-daily.ru/daily_json.js"
 # Types
 Params = Tuple[str, float]
 Response = Tuple[int, str]
+EResponse = NewType('EResponse', str)
 
 
 def validate_and_parse(query: str) -> (Params, str):
@@ -39,28 +40,35 @@ def validate_and_parse(query: str) -> (Params, str):
     return result, reason
 
 
-def get_exchanges_rates(currency: str, trying: int = 3) -> float:
-    currency = currency.upper()
+def get_exchanges_rates(trying: int = 3) -> (EResponse, str):
+    result, reason = "", ""
     try:
-        response = request.urlopen(EXCHANGES_ADDRESS).read()
-        rates = json.loads(response)['Valute']
-        assert (rate := rates.get(currency)) and (rate := rate['Value']), "no information on the rate of this currency"
-        return float(rate)
-
+        result = request.urlopen(EXCHANGES_ADDRESS).read()
     except error.HTTPError as e:
+        logger.warning("exchanges server is not available %s", e)
         time.sleep(1)
         if trying > 0:
-            return get_exchanges_rates(currency, trying - 1)  # recursion
-        e.args = (f"exchanges server error {e}, trying {trying}",)
-        raise e
+            return get_exchanges_rates(trying - 1)  # recursion
+        reason = f"exchanges server error {e}, trying {trying}"
+    return EResponse(result), reason
+
+
+def get_currency_rate(currency: str, exchanges_response: EResponse) -> (float, str):
+    result, reason = 0.0, ""
+    currency = currency.upper()
+    try:
+        rates = json.loads(exchanges_response)['Valute']
+        assert (rate := rates.get(currency)) and (rate := rate['Value']), "no information on the rate of this currency"
+        result = float(rate)
 
     except (json.JSONDecodeError, KeyError) as e:
-        e.args = (f"exchanges server response decode error, {e} [{response[:500]}]",)
-        raise e
-
+        reason = f"exchanges server response decode error, {e} [{exchanges_response[:500]}]"
+    except AssertionError as e:
+        reason = str(e)
     except ValueError as e:
-        e.args = (f"rate converting error {e} [{rate}]",)
-        raise e
+        reason = f"rate converting error {e} [{rate}]"
+
+    return result, reason
 
 
 def convert_handler(query: str) -> Response:
@@ -73,16 +81,16 @@ def convert_handler(query: str) -> Response:
         return 400, reason
 
     currency, value = params
-    try:
-        rate = get_exchanges_rates(currency)
-    except AssertionError as e:
-        logger.warning(e)
-        reason = json.dumps({'reason': str(e)})
+    exchanges_response, reason = get_exchanges_rates(3)
+    if not exchanges_response:
+        logger.warning(reason)
+        reason = json.dumps({'reason': reason})
         return 500, reason
 
-    except Exception as e:
-        logger.warning(e)
-        reason = json.dumps({'reason': "exchanges server error is not available"})
+    rate, reason = get_currency_rate(currency, exchanges_response)
+    if not rate:
+        logger.warning(reason)
+        reason = json.dumps({'reason': reason})
         return 500, reason
 
     result_value = json.dumps({"value": value * rate})
